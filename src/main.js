@@ -97,26 +97,17 @@ const main = async () => {
                 message: `Are you sure you want to rename those files:`,
             } 
          ]).then(({ value }) => {
-             const errors = [];
-             const success = [];
              if (value) {
                 for (let index = 0; index < renameList.length; index++) {
                     const [oldFile, newFile] = renameList[index];
                     const [oldInfo, newInfo] = [parsePath(oldFile), parsePath(newFile)];
                     try {
                         fs.renameSync(oldFile, newFile);
-                        success.push(colorize(`${path.join(newInfo.basename)}`, Colors.FgGreen));
+                        console.log(colorize(`${path.join(newInfo.basename)}`, Colors.FgGreen));
                     } catch (e) {
-                        errors.push(colorize(`${path.join(newInfo.basename)}`, Colors.FgRed));
+                        console.log(errors.push(colorize(`${path.join(newInfo.basename)}`, Colors.FgRed)));
                     }
                 }
-             }
-
-             if (errors.length > 0) {
-                 console.log(errors.join(' '));
-             }
-             if (success.length > 0) {
-                 console.log(success.join(' '));
              }
          });
     } else {
