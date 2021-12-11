@@ -31,7 +31,7 @@ const formatName = (str, format) => {
     const zeros = (format.match(/0/g) || []).length;
     str = String(str);
     
-    const mult = zeros - str.length;
+    const mult = (zeros - str.length) + 1;
     
     if (mult > 0) {
         const zerosPrint = '0'.repeat(mult);
