@@ -4,17 +4,28 @@ const fs = require('fs');
 const path = require("path");
 const os = require("os");
 const parsePath = require('parse-filepath');
-const { debug, escapeRegex, formatName } = require("./helpers");
+const { debug, escapeRegex, formatName, matchRule } = require("./helpers");
 const { colorize, Colors } = require("./colors");
 const inquirer = require("inquirer");
 const options = require("./options");
 
 const main = async () => {
-    const match = options._[0] || '.*';
+    const match = options._[0] || '*';
     const pwd = process.cwd();
     const input = fs.readdirSync(pwd).filter(name => {
         const lstat = fs.lstatSync(path.join(pwd, name));
-        return lstat.isFile() && (new RegExp(match, 'gim')).test(name);
+        // return lstat.isFile() && (new RegExp(match, 'gim')).test(name);
+        return lstat.isFile() && matchRule(name, match);
+    }).sort((a, b) => {
+        const ai = parseInt(a);
+        const bi = parseInt(b);
+        if (ai < bi) {
+            return -1
+        }
+        if (ai > bi) {
+            return 1;
+        }
+        return 0;
     });
     
     const format = options.format;
@@ -23,95 +34,87 @@ const main = async () => {
         process.exit(1);
     }
     
-    const output = [];
+    const names = [];
+    const namesList = [];
     for (let index = 0; index < input.length; index++) {
         const file = input[index];
-        const filePath = path.join(pwd, file);
-        const filePathinfo = parsePath(filePath);
-    
+        const idx = index + 1;
+        const rename = {
+           value: `${formatName(idx, format)}`,
+           index: idx,
+           exists: false,
+        };
         
-        const rename = `${formatName(index + 1, format)}`;
-
-        const renamePath = path.join(pwd, `${rename}${filePathinfo.ext}`);
-        output.push({
-            file: {
-                exists: fs.existsSync(filePath),
-                path: filePath,
-                pathinfo: filePathinfo,
-            },
-            rename: {
-                exists: fs.existsSync(renamePath),
-                name: rename,
-                path: renamePath,
-                pathinfo: parsePath(renamePath),
-            },
-        });
+        names.push(rename)
+        namesList.push(rename.value);
     }
     
-    const filesNotExits = output.filter(item => !item.file.exists).map(item => item.file.path);
-    if (filesNotExits.length > 0)  {
-        console.log(`The files does not exists:`);
-        filesNotExits.forEach(file => console.log(file));
-    }
-
-    const filesWillRename = output.filter(item => item.file.exists && !item.rename.exists).map(item => [
-        item.file.path,
-        item.rename.path,
-    ]);
-    
-    let index = 1;
-    if (filesWillRename.length > 0) {
-        index = Number(parsePath(filesWillRename[filesWillRename.length -1][1]).name);
+    for (let index = 0; index < input.length; index++) {
+        const file = input[index];
+        const info = parsePath(file);
+        const nameIndex = namesList.indexOf(info.name);
+        if (nameIndex > -1) {
+            names[nameIndex].exists = true;
+        }
     }
     
-    const filesThatExists = output.filter(item => item.file.exists && item.rename.exists).map((item, i) => [
-        item.file.path,
-        formatName(`${String(index + i)}${item.file.pathinfo.ext}`, format),
-    ]);
+    const uniquieNames = names.filter(item => item.exists == false);
+    const files = input.filter(item => namesList.indexOf(parsePath(item).name) == -1);
     
-    const files = filesWillRename.concat(filesThatExists);
-    
-    const size = new Array(files.length).fill(0)
+    const renameList = [];
     for (let index = 0; index < files.length; index++) {
-        const [oldFile, newFile] = files[index];
+        const oldName = files[index];
+        const info = parsePath(oldName);
+        const rename = uniquieNames.shift();
+        const newName = `${rename.value}${info.ext}`;
+        renameList.push([oldName, newName])
+    }
+    
+    const size = new Array(renameList.length).fill(0)
+    for (let index = 0; index < renameList.length; index++) {
+        const [oldFile, newFile] = renameList[index];
         const [oldInfo, newInfo] = [parsePath(oldFile), parsePath(newFile)];
         
         if (oldInfo.basename.length > size[index]) {
             size[index] = oldInfo.basename.length;
         }
-
     }
     
     const maxSize = Math.max(...size);
-    for (let index = 0; index < files.length; index++) {
-        const [oldFile, newFile] = files[index];
+    for (let index = 0; index < renameList.length; index++) {
+        const [oldFile, newFile] = renameList[index];
         const [oldInfo, newInfo] = [parsePath(oldFile), parsePath(newFile)];
         console.log(`${colorize(oldInfo.basename, Colors.FgRed)}${' '.repeat(maxSize - oldInfo.basename.length)} ➜ ${colorize(newInfo.basename, Colors.FgGreen)}`);
     }
     
-    inquirer.prompt([
-        {
-            type: 'confirm',
-            name: 'value',
-            default: false,
-            message: `Are you sure you want to rename those files:`,
-        } 
-     ]).then(({ value }) => {
-         if (value) {
-            for (let index = 0; index < files.length; index++) {
-                const [oldFile, newFile] = files[index];
-                const [oldInfo, newInfo] = [parsePath(oldFile), parsePath(newFile)];
-                fs.rename(oldFile, newFile, (err) => {
-                    if (err) {
-                        console.log(colorize(`${path.join(newInfo.basename)}`, Colors.FgRed));
-                        return ;
-                    }
-                    
-                    console.log(colorize(`${path.join(newInfo.basename)}`, Colors.FgGreen));
-                });
-            }
-         }
-     });
+    
+    if (renameList.length > 0) {
+        inquirer.prompt([
+            {
+                type: 'confirm',
+                name: 'value',
+                default: false,
+                message: `Are you sure you want to rename those files:`,
+            } 
+         ]).then(({ value }) => {
+             if (value) {
+                for (let index = 0; index < renameList.length; index++) {
+                    const [oldFile, newFile] = renameList[index];
+                    const [oldInfo, newInfo] = [parsePath(oldFile), parsePath(newFile)];
+                    fs.rename(oldFile, newFile, (err) => {
+                        if (err) {
+                            console.log(colorize(`${path.join(newInfo.basename)}`, Colors.FgRed));
+                            return ;
+                        }
+                        
+                        console.log(colorize(`${path.join(newInfo.basename)}`, Colors.FgGreen));
+                    });
+                }
+             }
+         });
+    } else {
+        console.log(colorize('No files to rename.', Colors.FgYellow));
+    }
 }
 
 main()

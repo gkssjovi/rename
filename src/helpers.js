@@ -28,8 +28,27 @@ const escapeRegex = (string) => {
 };
 
 const formatName = (str, format) => {
+    const zeros = (format.match(/0/g) || []).length;
+    str = String(str);
+    
+    const mult = zeros - str.length;
+    
+    if (mult > 0) {
+        const zerosPrint = '0'.repeat(mult);
+        return String(format).replace(/0+/, zerosPrint).replace(/%d/, str);
+    }
+    return str;
+
+};
+
+const formatNameRegex = (string) => {
     return String(format).replace(/%d/, String(str));
 };
+
+const matchRule = (str, rule) => {
+  var escapeRegex = (str) => str.replace(/([.*+?^=!:${}()|\[\]\/\\])/g, "\\$1");
+  return new RegExp("^" + rule.split("*").map(escapeRegex).join(".*") + "$").test(str);
+}
 
 module.exports = {
     call,
@@ -37,4 +56,5 @@ module.exports = {
     debug,
     escapeRegex,
     formatName,
+    matchRule,
 };

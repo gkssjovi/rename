@@ -1,6 +1,6 @@
 const yargs = require('yargs');
 const options = yargs
-    .command('<regex>', 'Regular expression')
+    .command('<match>', 'Match wildcard expression')
     .option('format', {
         alias: 'f',
         describe: 'Output format',
